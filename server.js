@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,41 +28,24 @@ app.post('/api/pdf', async (req, res) => {
 
   let browser;
   try {
-    // Environment Check: Vercel vs Local
-    if (process.env.VERCEL || process.env.AWS_REGION) {
-      
-      // CRITICAL VERCEL FIX: Vercel hides AWS variables. Sparticuz Needs this exactly to locate libnss3.so
-      process.env.AWS_LAMBDA_JS_RUNTIME = "nodejs22.x";
-      process.env.AWS_EXECUTION_ENV = 'AWS_Lambda_nodejs22.x';
-      
-      const chromium = require('@sparticuz/chromium');
-      const puppeteerCore = require('puppeteer-core');
-      
-      browser = await puppeteerCore.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-      });
-    } else {
-      const puppeteer = require('puppeteer');
-      browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
-    }
+    // Pure Puppeteer Execution - Guaranteed to work in our Docker environment
+    browser = await puppeteer.launch({
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+      headless: 'new',
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    });
     
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
     
-    // Set a realistic User-Agent to bypass basic bot protections
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-    // Using 'domcontentloaded' instead of 'networkidle2' is safer on Vercel to avoid the 10-second timeout limit
-    // Set timeout to 8500ms if on Vercel (to catch before 10s kill), otherwise 30000ms
-    const actionTimeout = process.env.VERCEL || process.env.AWS_REGION ? 8500 : 30000;
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: actionTimeout });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
@@ -96,11 +80,7 @@ app.post('/api/pdf', async (req, res) => {
   }
 });
 
-// Important for Vercel: We must export the app instead of just listening
-if (process.env.VERCEL) {
-  module.exports = app;
-} else {
-  app.listen(PORT, () => {
-    console.log(`Server is running! Access the UI at http://localhost:${PORT}`);
-  });
-}
+// App Listener
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running! Access the UI at http://0.0.0.0:${PORT}`);
+});
