@@ -49,9 +49,14 @@ app.post('/api/pdf', async (req, res) => {
     
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
+    
+    // Set a realistic User-Agent to bypass basic bot protections
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     // Using 'domcontentloaded' instead of 'networkidle2' is safer on Vercel to avoid the 10-second timeout limit
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Set timeout to 8500ms if on Vercel (to catch before 10s kill), otherwise 30000ms
+    const actionTimeout = process.env.VERCEL || process.env.AWS_REGION ? 8500 : 30000;
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: actionTimeout });
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
@@ -82,7 +87,7 @@ app.post('/api/pdf', async (req, res) => {
       await browser.close();
     }
     console.error('Puppeteer generation error:', error);
-    res.status(500).json({ error: 'فشلت معالجة الرابط. قد يكون الموقع محمي أو تجاوز وقت الرد المسموح.' });
+    res.status(500).json({ error: `فشلت معالجة الرابط. قد يكون الموقع محمي أو ثقيل جداً.\nالسبب التقني: ${error.message}` });
   }
 });
 
