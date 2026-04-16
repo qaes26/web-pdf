@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محول الروابط إلى PDF</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <!-- Animation Libraries (GSAP) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <!-- 3D Interactive Background (Three.js & Vanta.js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.halo.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #00f0ff; /* Cyberpunk Neon Cyan */
+            --primary-hover: #00c3d0;
+            --bg-glass: rgba(10, 15, 30, 0.45);
+            --border-glass: rgba(0, 240, 255, 0.25);
+            --text-main: #ffffff;
+            --text-muted: #a0aec0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        body {
+            background-color: #050810;
+            color: var(--text-main);
+            overflow: hidden; /* Hide scrollbars for cinematic full-screen effect */
+        }
+
+        /* The 3D Canvas Background */
+        #vanta-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+        }
+
+        .main-container {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* High-End Glassmorphism Card */
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--border-glass);
+            border-radius: 30px;
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 0 50px rgba(0, 240, 255, 0.1), inset 0 0 20px rgba(0, 240, 255, 0.05);
+            text-align: center;
+            opacity: 0; /* Hidden initially for GSAP */
+            transform: translateY(50px);
+            position: relative;
+        }
+
+        .title {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #ffffff, var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 0.5px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 16px;
+            margin-bottom: 40px;
+            font-weight: 400;
+            line-height: 1.6;
+        }
+
+        .input-wrapper {
+            position: relative;
+            margin-bottom: 30px;
+            direction: ltr; /* Keep URL left-to-right */
+        }
+
+        .url-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 18px 25px;
+            color: #fff;
+            font-size: 16px;
+            font-family: 'Outfit', sans-serif; /* Clean font for URLs */
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 4px 15px rgba(0,0,0,0.6);
+        }
+
+        .url-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.25), inset 0 4px 15px rgba(0,0,0,0.6);
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .url-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 300;
+        }
+
+        .convert-btn {
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 18px 40px;
+            font-size: 18px;
+            font-weight: 700;
+            border-radius: 16px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Button Hover Fill Effect */
+        .convert-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            transform: scaleX(0);
+            transform-origin: right;
+            transition: transform 0.4s ease;
+            z-index: -1;
+        }
+
+        .convert-btn:hover::before {
+            transform: scaleX(1);
+            transform-origin: left;
+        }
+
+        .convert-btn:hover {
+            color: #000;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .convert-btn:active {
+            transform: translateY(2px) scale(0.98);
+        }
+
+        .convert-btn:disabled {
+            border-color: #333;
+            color: #666;
+            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: none;
+            transform: none;
+        }
+        
+        .convert-btn:disabled::before {
+            display: none;
+        }
+
+        /* Modern loader */
+        .loader {
+            display: none;
+            width: 22px;
+            height: 22px;
+            border: 3px solid rgba(0,0,0,0.1);
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Message popups */
+        .message {
+            margin-top: 25px;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            opacity: 0;
+            display: none;
+            transform: translateY(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        .message.success {
+            background: rgba(0, 255, 170, 0.15);
+            color: #00ffaa;
+            border: 1px solid rgba(0, 255, 170, 0.3);
+            box-shadow: 0 0 20px rgba(0, 255, 170, 0.1);
+        }
+
+        .message.error {
+            background: rgba(255, 50, 50, 0.15);
+            color: #ff4a4a;
+            border: 1px solid rgba(255, 50, 50, 0.3);
+            box-shadow: 0 0 20px rgba(255, 50, 50, 0.1);
+        }
+
+        /* Cyberpunk Decor Lines */
+        .cyber-line {
+            position: absolute;
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+            opacity: 0.7;
+        }
+        .line-1 { top: 40px; right: -10px; width: 30px; height: 3px; border-radius: 3px; }
+        .line-2 { bottom: 40px; left: -10px; width: 30px; height: 3px; border-radius: 3px; }
+
+        /* The Custom Signature */
+        .footer-credit {
+            position: absolute;
+            bottom: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0; /* Hidden initially for GSAP */
+            z-index: 10;
+        }
+
+        .footer-credit span {
+            color: var(--primary);
+            font-weight: 800;
+            text-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
+            font-size: 18px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- 3D Background Canvas -->
+    <div id="vanta-canvas"></div>
+
+    <div class="main-container">
+        <!-- Floating Cyberpunk Panel -->
+        <div class="glass-panel" id="mainPanel">
+            <div class="cyber-line line-1"></div>
+            <div class="cyber-line line-2"></div>
+
+            <h1 class="title">Web To PDF Engine</h1>
+            <p class="subtitle">قم بتحويل أي موقع إلكتروني إلى ملف PDF عالي الجودة بلمسة احترافية</p>
+
+            <form id="convertForm">
+                <div class="input-wrapper">
+                    <!-- English URL input should remain LTR -->
+                    <input type="url" id="urlInput" class="url-input" placeholder="https://www.example.com" required autocomplete="off">
+                </div>
+                
+                <button type="submit" id="submitBtn" class="convert-btn">
+                    <span id="btnText">تحويل الآن</span>
+                    <div class="loader" id="loader"></div>
+                </button>
+            </form>
+
+            <div id="messageBox" class="message"></div>
+        </div>
+        
+        <!-- Author Credit Signature -->
+        <div class="footer-credit" id="footerCredit">
+            إعداد <span>قيس الجازي</span>
+        </div>
+    </div>
+
+    <script>
+        // 1. Initialize Vanta.js HALO effect (Cyberpunk/Tech style)
+        window.addEventListener('DOMContentLoaded', () => {
+            VANTA.HALO({
+                el: "#vanta-canvas",
+                mouseControls: true,
+                touchControls: true,
+                gyroControls: false,
+                minHeight: 200.00,
+                minWidth: 200.00,
+                baseColor: 0x00f0ff,
+                backgroundColor: 0x050810,
+                amplitudeFactor: 1.5,
+                xOffset: 0,
+                yOffset: 0.1,
+                size: 1.5
+            });
+
+            // 2. GSAP Intro Animations (Entrance)
+            gsap.to("#mainPanel", {
+                duration: 1.5,
+                y: 0,
+                opacity: 1,
+                ease: "expo.out",
+                delay: 0.3
+            });
+
+            gsap.to("#footerCredit", {
+                duration: 1.5,
+                opacity: 1,
+                y: -10,
+                ease: "power3.out",
+                delay: 0.8
+            });
+        });
+
+        // 3. 3D Hover Tilt Effect using GSAP
+        document.addEventListener('mousemove', (e) => {
+            const panel = document.getElementById('mainPanel');
+            const rect = panel.getBoundingClientRect();
+            // Calculate mouse position relative to center of panel
+            const x = e.clientX - rect.left - rect.width / 2;
+            const y = e.clientY - rect.top - rect.height / 2;
+
+            // Apply slight 3D rotation based on mouse pos
+            gsap.to(panel, {
+                rotationY: x * 0.03, // Intensity of X rotation
+                rotationX: -y * 0.03, // Intensity of Y rotation
+                transformPerspective: 1000,
+                ease: "power2.out",
+                duration: 0.6
+            });
+        });
+
+        // Reset tilt on mouse leave
+        document.addEventListener('mouseleave', () => {
+            gsap.to(document.getElementById('mainPanel'), {
+                rotationY: 0,
+                rotationX: 0,
+                ease: "elastic.out(1, 0.3)",
+                duration: 1.5
+            });
+        });
+
+        // 4. Form Submission Logic
+        const form = document.getElementById('convertForm');
+        const urlInput = document.getElementById('urlInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const loader = document.getElementById('loader');
+        const messageBox = document.getElementById('messageBox');
+
+        const showMessage = (text, type) => {
+            messageBox.textContent = text;
+            messageBox.className = `message ${type}`;
+            messageBox.style.display = 'block';
+            
+            // Pop-in animation for message
+            gsap.fromTo(messageBox, 
+                { opacity: 0, y: 15, scale: 0.95 }, 
+                { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.5)" }
+            );
+        };
+
+        const setLoading = (isLoading) => {
+            if (isLoading) {
+                submitBtn.disabled = true;
+                btnText.textContent = 'جاري المعالجة...';
+                loader.style.display = 'block';
+                messageBox.style.display = 'none';
+            } else {
+                submitBtn.disabled = false;
+                btnText.textContent = 'تحويل الآن';
+                loader.style.display = 'none';
+            }
+        };
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            let url = urlInput.value.trim();
+            if (!url) return;
+
+            // Enforce proper protocol automatically
+            if (!/^https?:\/\//i.test(url)) {
+                url = 'https://' + url;
+                urlInput.value = url;
+            }
+
+            setLoading(true);
+
+            try {
+                const response = await fetch('/api/pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!response.ok) {
+                    const errObj = await response.json();
+                    throw new Error(errObj.error || 'فشلت عملية التحويل. تأكد من صحة الرابط.');
+                }
+
+                // Handle PDF Download
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                
+                let filename = 'document.pdf';
+                try {
+                    const urlObj = new URL(url);
+                    // Extract domain without 'www.' for a clean filename
+                    filename = `${urlObj.hostname.replace('www.', '')}.pdf`;
+                } catch(e) {}
+
+                // Trigger programmatic hidden anchor click
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                window.URL.revokeObjectURL(downloadUrl);
+                document.body.removeChild(a);
+
+                showMessage('تم استخراج الملف وتحميله بنجاح!', 'success');
+                urlInput.value = '';
+
+            } catch (error) {
+                showMessage(error.message, 'error');
+            } finally {
+                setLoading(false);
+            }
+        });
+    </script>
+</body>
+</html>
