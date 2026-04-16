@@ -29,6 +29,10 @@ app.post('/api/pdf', async (req, res) => {
   try {
     // Environment Check: Vercel vs Local
     if (process.env.VERCEL || process.env.AWS_REGION) {
+      
+      // CRITICAL VERCEL FIX: Vercel hides AWS variables. Sparticuz Needs this exactly to locate libnss3.so
+      process.env.AWS_LAMBDA_JS_RUNTIME = "nodejs18.x";
+      
       const chromium = require('@sparticuz/chromium');
       const puppeteerCore = require('puppeteer-core');
       
